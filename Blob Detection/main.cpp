@@ -27,9 +27,21 @@ struct color {
     int b;
 };
 
-unsigned *map;
+struct region {
+    int minX;
+    int maxX;
+    int minY;
+    int maxY;
+    
+    color color;
+    int colorBits;
+};
+
+int *map;
 
 color colors[8];
+
+region *regions;
 
 
 inline int get_max(int x, int y) {
@@ -40,6 +52,7 @@ inline int get_min(int x, int y) {
     return x < y ? x : y;
 }
 
+//load the colors
 bool loadColors() {
     for (int i = 0; i < 256; i++) {
         y_arr[i] = 0;
@@ -105,10 +118,11 @@ template<typename T> CImg<T> RGBtoYUV(CImg<T> image) {
     return changed;
 }
 
+//detect the colors of the pixels using bitwise and store in map array
 template<typename T> CImg<T> detectColors(CImg<T> image) {
     CImg<T> changed(image.width(), image.height(), 1, 3, 0);
+    map = (int*) calloc(image.width() * image.height(), 1);
     image.RGBtoYCbCr();
-
     for (int y = 0; y < image.height(); y++) {
         for (int x = 0; x < image.width(); x++) {
 
@@ -125,7 +139,71 @@ template<typename T> CImg<T> detectColors(CImg<T> image) {
     return changed;
 }
 
-inline color colorfromBits(int colorBits) {
+/*Find groups
+ BUFFER:
+ _____________
+ | A | B | C |
+ -------------
+ | D | X |
+ */
+template<typename T> CImg<T> findGroups(CImg<T> image) {
+    int *labelTable; //values correspond to indeces of regions array
+    int width = image.width();
+    int height = image.height();
+    
+    int labelBuffer[width * height];
+    
+    int currLabel = 1;
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int i = y * image.width() + x;
+            int aLabel = (x > 0 && y > 0) ? labelBuffer[i - width - 1] : 0;
+            int bLabel = (y > 0) ? labelBuffer[i - width] : 0;
+            int cLabel = (x < width - 1 && y > 0) ? labelBuffer[i - width + 1] : 0;
+            int dLabel = (x > 0) ? labelBuffer[i - 1] : 0;
+            
+            if (map[i] != 0) {
+                int min = width * height + 1;
+                if (aLabel != 0 && regions[labelTable[aLabel]].colorBits == map[i] && aLabel < min) min = aLabel;
+                if (bLabel != 0 && regions[labelTable[bLabel]].colorBits == map[i] && bLabel < min) min = bLabel;
+                if (cLabel != 0 && regions[labelTable[cLabel]].colorBits == map[i] && cLabel < min) min = cLabel;
+                if (dLabel != 0 && regions[labelTable[dLabel]].colorBits == map[i] && dLabel < min) min = dLabel;
+                
+                //A, B, C, and D must be unlabeled
+                if (min == width * height + 1) {
+                    labelBuffer[i] = currLabel;
+                    labelTable[currLabel] = currLabel;
+                    region r;
+                    
+                    //Initialize values for region/labels
+                    r.minX = x;
+                    r.maxX = x;
+                    r.minY = y;
+                    r.maxY = y;
+                    r.colorBits = map[i];
+                    regions[currLabel] = r;
+                    
+                    currLabel++;
+                } else {
+                    labelBuffer[i] = min;
+                    
+                    regions[min].maxY = y;
+                    
+                    if (x > regions[min].maxX) regions[min].maxX = x;
+                    if (x < regions[min].minX) regions[min].minX = x;
+                }
+            }
+            else {
+                labelBuffer[i] = 0;
+            }
+        }
+    }
+    
+    //GO THROUGH AND DO PART 2 OF THE WEBSITE
+}
+
+//Returns color for a pixel's value from the bitwise operations.
+inline color colorFromBits(int colorBits) {
     return colors[(int) (log(colorBits) / log(2))];
 }
 
