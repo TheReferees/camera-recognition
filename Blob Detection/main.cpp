@@ -12,6 +12,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <math.h>
+#include <vector>
 #include "CImg.h"
 #define cimg_use_magick
 
@@ -22,6 +23,7 @@ int u_arr[256];
 int v_arr[256];
 
 struct color {
+    std::string name = "";
     int r;
     int g;
     int b;
@@ -37,12 +39,12 @@ struct region {
     int colorBits;
 };
 
-int *map;
+std::vector<int> map;
 
 color colors[8];
 
-region *regions;
-
+std::vector<region> blobs;
+int blobsCount;
 
 inline int get_max(int x, int y) {
     return x > y ? x : y;
@@ -50,6 +52,11 @@ inline int get_max(int x, int y) {
 
 inline int get_min(int x, int y) {
     return x < y ? x : y;
+}
+
+//Returns color for a pixel's value from the bitwise operations.
+inline color colorFromBits(int colorBits) {
+    return colors[(int) (log(colorBits) / log(2))];
 }
 
 //load the colors
@@ -94,6 +101,8 @@ bool loadColors() {
     colors[0].r = 255;
     colors[0].g = 0;
     colors[0].b = 0;
+    colors[0].name = "Red";
+
     
     return true;
 }
@@ -118,26 +127,6 @@ template<typename T> CImg<T> RGBtoYUV(CImg<T> image) {
     return changed;
 }
 
-//detect the colors of the pixels using bitwise and store in map array
-template<typename T> CImg<T> detectColors(CImg<T> image) {
-    CImg<T> changed(image.width(), image.height(), 1, 3, 0);
-    map = (int*) calloc(image.width() * image.height(), 1);
-    image.RGBtoYCbCr();
-    for (int y = 0; y < image.height(); y++) {
-        for (int x = 0; x < image.width(); x++) {
-
-            int color_y = image(x, y, 0);
-            int color_u = image(x, y, 1);
-            int color_v = image(x, y, 2);
-            
-            int colorBits = (y_arr[color_y] & u_arr[color_u]) & v_arr[color_v];
-            
-            map[y * image.width() + x] = colorBits;
-        }
-    }
-    
-    return changed;
-}
 
 /*Find groups
  BUFFER:
@@ -146,11 +135,14 @@ template<typename T> CImg<T> detectColors(CImg<T> image) {
  -------------
  | D | X |
  */
-template<typename T> CImg<T> findGroups(CImg<T> image) {
-    int *labelTable; //values correspond to indeces of regions array
+template<typename T> void findGroups(CImg<T> image) {
+
     int width = image.width();
     int height = image.height();
     
+    std::vector<int> labelTable = {0}; //values correspond to indeces of regionsTable array
+    std::vector<region> regionsTable;
+
     int labelBuffer[width * height];
     
     int currLabel = 1;
@@ -164,15 +156,15 @@ template<typename T> CImg<T> findGroups(CImg<T> image) {
             
             if (map[i] != 0) {
                 int min = width * height + 1;
-                if (aLabel != 0 && regions[labelTable[aLabel]].colorBits == map[i] && aLabel < min) min = aLabel;
-                if (bLabel != 0 && regions[labelTable[bLabel]].colorBits == map[i] && bLabel < min) min = bLabel;
-                if (cLabel != 0 && regions[labelTable[cLabel]].colorBits == map[i] && cLabel < min) min = cLabel;
-                if (dLabel != 0 && regions[labelTable[dLabel]].colorBits == map[i] && dLabel < min) min = dLabel;
+                if (aLabel != 0 && regionsTable[labelTable[aLabel]].colorBits == map[i] && aLabel < min) min = aLabel;
+                if (bLabel != 0 && regionsTable[labelTable[bLabel]].colorBits == map[i] && bLabel < min) min = bLabel;
+                if (cLabel != 0 && regionsTable[labelTable[cLabel]].colorBits == map[i] && cLabel < min) min = cLabel;
+                if (dLabel != 0 && regionsTable[labelTable[dLabel]].colorBits == map[i] && dLabel < min) min = dLabel;
                 
                 //A, B, C, and D must be unlabeled
                 if (min == width * height + 1) {
                     labelBuffer[i] = currLabel;
-                    labelTable[currLabel] = currLabel;
+                    labelTable.push_back((int) labelTable.size());
                     region r;
                     
                     //Initialize values for region/labels
@@ -181,16 +173,21 @@ template<typename T> CImg<T> findGroups(CImg<T> image) {
                     r.minY = y;
                     r.maxY = y;
                     r.colorBits = map[i];
-                    regions[currLabel] = r;
+                    regionsTable.push_back(r);
                     
                     currLabel++;
                 } else {
                     labelBuffer[i] = min;
                     
-                    regions[min].maxY = y;
+                    regionsTable[min].maxY = y;
                     
-                    if (x > regions[min].maxX) regions[min].maxX = x;
-                    if (x < regions[min].minX) regions[min].minX = x;
+                    if (x > regionsTable[min].maxX) regionsTable[min].maxX = x;
+                    if (x < regionsTable[min].minX) regionsTable[min].minX = x;
+                    
+                    if (aLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[aLabel]].colorBits) labelTable[aLabel] = min;
+                    if (bLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[bLabel]].colorBits) labelTable[bLabel] = min;
+                    if (cLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[cLabel]].colorBits) labelTable[cLabel] = min;
+                    if (dLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[dLabel]].colorBits) labelTable[dLabel] = min;
                 }
             }
             else {
@@ -199,12 +196,77 @@ template<typename T> CImg<T> findGroups(CImg<T> image) {
         }
     }
     
-    //GO THROUGH AND DO PART 2 OF THE WEBSITE
+    for (int i = 1; i < regionsTable.size() - 1; i++) {
+        if (labelTable[i] != i) {
+            if (regionsTable[i].maxX > regionsTable[labelTable[i]].maxX) regionsTable[labelTable[i]].maxX = regionsTable[i].maxX;
+            if (regionsTable[i].minX < regionsTable[labelTable[i]].minX) regionsTable[labelTable[i]].minX = regionsTable[i].minX;
+            if (regionsTable[i].maxY > regionsTable[labelTable[i]].maxY) regionsTable[labelTable[i]].maxY = regionsTable[i].maxY;
+            if (regionsTable[i].minY < regionsTable[labelTable[i]].minY) regionsTable[labelTable[i]].minY = regionsTable[i].minY;
+        } else {
+            //std::cout << regionsTable[i].colorBits << std::endl;
+            blobs.push_back(regionsTable[i]);
+        }
+    }
 }
 
-//Returns color for a pixel's value from the bitwise operations.
-inline color colorFromBits(int colorBits) {
-    return colors[(int) (log(colorBits) / log(2))];
+void printRegionInfo() {
+    for (int i = 0; i < blobs.size();i++) {
+        blobs[i].color = colorFromBits(blobs[i].colorBits);
+        if (blobs[i].maxX - blobs[i].minX > 50) {
+            std::cout << "X: " << blobs[i].minX << " -> " << blobs[i].maxX << ", Y: " << blobs[i].minY << " -> " << blobs[i].maxY << ", Color: " << blobs[i].color.name << " (" << blobs[i].color.r << ", " << blobs[i].color.g << ", " << blobs[i].color.b << ")" << std::endl;
+        }
+    }
+}
+
+//detect the colors of the pixels using bitwise and store in map array
+template<typename T> CImg<T> detectColors(CImg<T> image) {
+    CImg<T> changed(image.width(), image.height(), 1, 3, 0);
+    image.RGBtoYCbCr();
+    for (int y = 0; y < image.height(); y++) {
+        for (int x = 0; x < image.width(); x++) {
+            
+            int color_y = image(x, y, 0);
+            int color_u = image(x, y, 1);
+            int color_v = image(x, y, 2);
+            
+            int colorBits = (y_arr[color_y] & u_arr[color_u]) & v_arr[color_v];
+            
+            map.push_back(colorBits);
+        }
+    }
+    
+    findGroups(image);
+    
+    printRegionInfo();
+    
+    for (int i = 0; i < blobs.size();i++) {
+        int minX = blobs[i].minX;
+        int maxX = blobs[i].maxX;
+        int minY = blobs[i].minY;
+        int maxY = blobs[i].maxY;
+        
+        for (int x = minX; x <= maxX;x++) {
+            changed(x, minY, 0) = blobs[i].color.r;
+            changed(x, minY, 1) = blobs[i].color.g;
+            changed(x, minY, 2) = blobs[i].color.b;
+            
+            changed(x, maxY, 0) = blobs[i].color.r;
+            changed(x, maxY, 1) = blobs[i].color.g;
+            changed(x, maxY, 2) = blobs[i].color.b;
+            
+            for (int y = minY; y <= maxY; y++) {
+                changed(minX, y, 0) = blobs[i].color.r;
+                changed(minX, y, 1) = blobs[i].color.g;
+                changed(minX, y, 2) = blobs[i].color.b;
+                
+                changed(maxX, y, 0) = blobs[i].color.r;
+                changed(maxX, y, 1) = blobs[i].color.g;
+                changed(maxX, y, 2) = blobs[i].color.b;
+            }
+        }
+    }
+    
+    return changed;
 }
 
 int main(int argc, const char * argv[]) {
