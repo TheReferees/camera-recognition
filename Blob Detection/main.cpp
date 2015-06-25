@@ -35,6 +35,8 @@ struct region {
     int minY;
     int maxY;
     
+    int mass = 1;
+    
     color color;
     int colorBits;
 };
@@ -181,6 +183,8 @@ template<typename T> void findGroups(CImg<T> image) {
                     
                     regionsTable[min].maxY = y;
                     
+                    regionsTable[min].mass++;
+                    
                     if (x > regionsTable[min].maxX) regionsTable[min].maxX = x;
                     if (x < regionsTable[min].minX) regionsTable[min].minX = x;
                     
@@ -203,17 +207,52 @@ template<typename T> void findGroups(CImg<T> image) {
             if (regionsTable[i].maxY > regionsTable[labelTable[i]].maxY) regionsTable[labelTable[i]].maxY = regionsTable[i].maxY;
             if (regionsTable[i].minY < regionsTable[labelTable[i]].minY) regionsTable[labelTable[i]].minY = regionsTable[i].minY;
         } else {
-            //std::cout << regionsTable[i].colorBits << std::endl;
-            blobs.push_back(regionsTable[i]);
+            if (regionsTable[i].mass > 50) blobs.push_back(regionsTable[i]);
         }
     }
 }
 
-void printRegionInfo() {
+void setColors() {
     for (int i = 0; i < blobs.size();i++) {
         blobs[i].color = colorFromBits(blobs[i].colorBits);
-        if (blobs[i].maxX - blobs[i].minX > 50) {
-            std::cout << "X: " << blobs[i].minX << " -> " << blobs[i].maxX << ", Y: " << blobs[i].minY << " -> " << blobs[i].maxY << ", Color: " << blobs[i].color.name << " (" << blobs[i].color.r << ", " << blobs[i].color.g << ", " << blobs[i].color.b << ")" << std::endl;
+        std::cout << "X: " << blobs[i].minX << " -> " << blobs[i].maxX << ", Y: " << blobs[i].minY << " -> " << blobs[i].maxY << ", Color: " << blobs[i].color.name << " (" << blobs[i].color.r << ", " << blobs[i].color.g << ", " << blobs[i].color.b << ")" << ", Mass: " << blobs[i].mass << std::endl;
+    }
+}
+
+region mergeBlobs(region first, region second) {
+    region merged;
+    
+    merged.colorBits = first.colorBits;
+    merged.minX = get_min(first.minX, second.minX);
+    merged.minY = get_min(first.minY, second.minY);
+    merged.maxX = get_max(first.maxX, second.maxX);
+    merged.maxY = get_max(first.maxY, second.maxY);
+    merged.mass = first.mass + second.mass;
+    
+    return merged;
+}
+
+bool checkDensity(region first, region second, int threshold) {
+    double originalDensity = first.mass / ((first.maxX - first.minX) * (first.maxY - first.minY));
+    double newDensity = (double) (first.mass + second.mass) / ((get_max(first.maxX, second.maxX) - get_min(first.minX, second.minX)) * (get_max(first.maxY, second.maxY) - get_min(first.minY, second.minY)));
+    return newDensity - originalDensity >= 0 || originalDensity - newDensity < threshold;
+}
+
+void mergeDensities() {
+    for (int i = 0; i < blobs.size() - 1;i++) {
+        for (int j = i + 1; j < blobs.size(); j++) {
+            int first_x = (blobs[i].minX + blobs[i].maxX) / 2;
+            int first_y = (blobs[i].minY + blobs[i].maxY) / 2;
+            int second_x = (blobs[j].minX + blobs[j].maxX) / 2;
+            int second_y = (blobs[j].minY + blobs[j].maxY) / 2;
+            int maxDistanceX = first_x - blobs[i].minX + second_x - blobs[j].minX + 10;
+            int maxDistanceY = first_y - blobs[i].minY + second_y - blobs[j].minY + 10;
+            
+            //TODO: Check Distance!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Overlapping won't be same item........
+            if (std::abs(first_x - second_x) < maxDistanceX && std::abs(first_y - second_y) < maxDistanceY && blobs[i].colorBits == blobs[j].colorBits && checkDensity(blobs[i], blobs[j], 1)) {
+                blobs[i] = mergeBlobs(blobs[i], blobs[j]);
+                blobs.erase(blobs.begin() + j);
+            }
         }
     }
 }
@@ -221,13 +260,14 @@ void printRegionInfo() {
 //detect the colors of the pixels using bitwise and store in map array
 template<typename T> CImg<T> detectColors(CImg<T> image) {
     CImg<T> changed(image.width(), image.height(), 1, 3, 0);
-    image.RGBtoYCbCr();
+    CImg<T> converted = image.get_RGBtoYCbCr();
+    changed = image;
     for (int y = 0; y < image.height(); y++) {
         for (int x = 0; x < image.width(); x++) {
             
-            int color_y = image(x, y, 0);
-            int color_u = image(x, y, 1);
-            int color_v = image(x, y, 2);
+            int color_y = converted(x, y, 0);
+            int color_u = converted(x, y, 1);
+            int color_v = converted(x, y, 2);
             
             int colorBits = (y_arr[color_y] & u_arr[color_u]) & v_arr[color_v];
             
@@ -237,7 +277,9 @@ template<typename T> CImg<T> detectColors(CImg<T> image) {
     
     findGroups(image);
     
-    printRegionInfo();
+    mergeDensities();
+    
+    setColors();
     
     for (int i = 0; i < blobs.size();i++) {
         int minX = blobs[i].minX;

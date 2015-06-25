@@ -10,12 +10,12 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Blob Detection/main.cpp"
-            timestampString = "456896686.22978"
+            timestampString = "456899009.356681"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "218"
-            endingLineNumber = "218"
-            landmarkName = "printRegionInfo()"
+            startingLineNumber = "219"
+            endingLineNumber = "219"
+            landmarkName = "setColors()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -26,11 +26,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Blob Detection/main.cpp"
-            timestampString = "456891180.999692"
+            timestampString = "456897235.567198"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "59"
-            endingLineNumber = "59"
+            startingLineNumber = "61"
+            endingLineNumber = "61"
             landmarkName = "colorFromBits(int colorBits)"
             landmarkType = "7">
          </BreakpointContent>
@@ -42,11 +42,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Blob Detection/main.cpp"
-            timestampString = "456890173.412896"
+            timestampString = "456897235.567198"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "167"
-            endingLineNumber = "167"
+            startingLineNumber = "169"
+            endingLineNumber = "169"
             landmarkName = "findGroups(CImg&lt;T&gt; image)"
             landmarkType = "7">
          </BreakpointContent>
@@ -58,11 +58,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Blob Detection/main.cpp"
-            timestampString = "456896686.22978"
+            timestampString = "456904198.062993"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "265"
-            endingLineNumber = "265"
+            startingLineNumber = "306"
+            endingLineNumber = "306"
             landmarkName = "detectColors(CImg&lt;T&gt; image)"
             landmarkType = "7">
          </BreakpointContent>
@@ -74,11 +74,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Blob Detection/main.cpp"
-            timestampString = "456896686.22978"
+            timestampString = "456904198.062993"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "242"
-            endingLineNumber = "242"
+            startingLineNumber = "284"
+            endingLineNumber = "284"
             landmarkName = "detectColors(CImg&lt;T&gt; image)"
             landmarkType = "7">
          </BreakpointContent>
@@ -90,12 +90,12 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Blob Detection/main.cpp"
-            timestampString = "456896686.22978"
+            timestampString = "456897235.567198"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "214"
-            endingLineNumber = "214"
-            landmarkName = "printRegionInfo()"
+            startingLineNumber = "217"
+            endingLineNumber = "217"
+            landmarkName = "setColors()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -106,12 +106,28 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Blob Detection/main.cpp"
-            timestampString = "456896686.22978"
+            timestampString = "456904198.062993"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "240"
-            endingLineNumber = "240"
+            startingLineNumber = "279"
+            endingLineNumber = "279"
             landmarkName = "detectColors(CImg&lt;T&gt; image)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "Blob Detection/main.cpp"
+            timestampString = "456903648.239653"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "237"
+            endingLineNumber = "237"
+            landmarkName = "checkDensity(region first, region second, int threshold)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
