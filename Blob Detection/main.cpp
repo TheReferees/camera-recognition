@@ -90,9 +90,13 @@ bool loadColors() {
             for (int j = y1; j < y2; j++) {
                 y_arr[j] |= (1 << i);
             }
+            u1 = get_max(u1, 0);
+            u2 = get_min(u2, 256);
             for (int j = u1; j < u2; j++) {
                 u_arr[j] |= (1 << i);
             }
+            v1 = get_max(v1, 0);
+            v2 = get_min(v2, 256);
             for (int j = v1; j < v2; j++) {
                 v_arr[j] |= (1 << i);
             }
