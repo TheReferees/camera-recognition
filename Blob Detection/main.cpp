@@ -216,7 +216,7 @@ template<typename T> void findRegions(CImg<T> image) {
     //Contains the label number for each cell (0 for unlabelled)
     int labelBuffer[width * height];
     
-    labelCells(image, labelBuffer, labelTable, regionsTable);
+    labelCells(image, labelBuffer, &labelTable, &regionsTable);
     
     for (int i = 1; i < regionsTable.size() - 1; i++) {
         //if the label is not the smallest label number of the region
@@ -281,7 +281,7 @@ void mergeDensities() {
 }
 
 //Detect the colors by confirming the color is within the ranges in the Y, U, and V arrays.
-template<typename T> CImg<T> detectColors(CImg<T> image) {
+template<typename T> void detectColors(CImg<T> image) {
     for (int y = 0; y < image.height(); y++) {
         for (int x = 0; x < image.width(); x++) {
             
