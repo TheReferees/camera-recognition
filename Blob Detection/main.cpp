@@ -41,9 +41,9 @@ struct region {
     int colorBits;
 };
 
-std::vector<int> map;
+std::vector<int> pixelColors;
 
-color colors[8];
+color rgbColors[8];
 
 std::vector<region> blobs;
 int blobsCount;
@@ -58,17 +58,12 @@ inline int get_min(int x, int y) {
 
 //Returns color for a pixel's value from the bitwise operations.
 inline color colorFromBits(int colorBits) {
-    return colors[(int) (log(colorBits) / log(2))];
+    return rgbColors[(int) (log(colorBits) / log(2))];
 }
 
-//load the colors
-bool loadColors() {
-    for (int i = 0; i < 256; i++) {
-        y_arr[i] = 0;
-        u_arr[i] = 0;
-        v_arr[i] = 0;
-    }
-    
+//Sets the YUV arrays to the correct bits by looping through the colors.txt file.
+//Values at YUV indexes within the range of color are given a bit.
+bool setYUVColors() {
     FILE *in;
     
     in = fopen("colors.txt", "r");
@@ -85,6 +80,7 @@ bool loadColors() {
         int n = sscanf(buf,"(%d:%d,%d:%d,%d:%d)",&y1,&y2,&u1,&u2,&v1,&v2);
         
         if (n == 6) {
+            //clip values to 0-256 and add 1 bit to the front of all values in range.
             y1 = get_max(y1, 0);
             y2 = get_min(y2, 256);
             for (int j = y1; j < y2; j++) {
@@ -103,74 +99,72 @@ bool loadColors() {
         }
         i++;
     }
-    
-    colors[0].r = 255;
-    colors[0].g = 0;
-    colors[0].b = 0;
-    colors[0].name = "Red";
+    return true;
+}
 
+//load the colors
+bool loadColors() {
+    for (int i = 0; i < 256; i++) {
+        y_arr[i] = 0;
+        u_arr[i] = 0;
+        v_arr[i] = 0;
+    }
+    
+    if (!setYUVColors())
+        return false;
+    
+    //set rgb values for colors
+    rgbColors[0].r = 255;
+    rgbColors[0].g = 0;
+    rgbColors[0].b = 0;
+    rgbColors[0].name = "Red";
     
     return true;
 }
 
-template<typename T> CImg<T> RGBtoYUV(CImg<T> image) {
-    CImg<T> changed(image.width(), image.height(), 1, 3, 0);
-    for (int x = 0; x < image.width();x++) {
-        for (int y = 0; y < image.height(); y++) {
-            T r = image(0, 0, 0, 0);
-            T g = image(0, 0, 0, 1);
-            T b = image(0, 0, 0, 2);
-
-            T u = (r + 1.96*g - 2.96*b) / (-3.333);
-            T y_col = b - u;
-            T v = r - y_col;
-            
-            changed(x, y, 0, 0) = y_col;
-            changed(x, y, 0, 1) = u;
-            changed(x, y, 0, 2) = v;
-        }
-    }
-    return changed;
-}
-
-
-/*Find groups
- BUFFER:
+/*Find regions of certain colors (regions contain one or more labelled groups)
+ KERNEL:
  _____________
  | A | B | C |
  -------------
  | D | X |
+ 
+ LabelTable: Index is the label number, value is another label it is touching (optional)
+             Intention is to map labels that touch eachother so they all point to one region
  */
-template<typename T> void findGroups(CImg<T> image) {
-
+template<typename T> void labelCells(CImg<T> image, int * labelBuffer, std::vector<int> * labelTable, std::vector<region> * regionsTable) {
     int width = image.width();
     int height = image.height();
     
-    std::vector<int> labelTable = {0}; //values correspond to indeces of regionsTable array
-    std::vector<region> regionsTable;
-
-    int labelBuffer[width * height];
-    
+    //Current label # to use
     int currLabel = 1;
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            int i = y * image.width() + x;
+            //current pixel number in one dimensional array
+            int i = y * width + x;
+            
             int aLabel = (x > 0 && y > 0) ? labelBuffer[i - width - 1] : 0;
             int bLabel = (y > 0) ? labelBuffer[i - width] : 0;
             int cLabel = (x < width - 1 && y > 0) ? labelBuffer[i - width + 1] : 0;
             int dLabel = (x > 0) ? labelBuffer[i - 1] : 0;
             
-            if (map[i] != 0) {
+            //if the pixel matches a known color
+            if (pixelColors[i] != 0) {
+                //min: smallest label number of neighbors (A, B, C, D)
                 int min = width * height + 1;
-                if (aLabel != 0 && regionsTable[labelTable[aLabel]].colorBits == map[i] && aLabel < min) min = aLabel;
-                if (bLabel != 0 && regionsTable[labelTable[bLabel]].colorBits == map[i] && bLabel < min) min = bLabel;
-                if (cLabel != 0 && regionsTable[labelTable[cLabel]].colorBits == map[i] && cLabel < min) min = cLabel;
-                if (dLabel != 0 && regionsTable[labelTable[dLabel]].colorBits == map[i] && dLabel < min) min = dLabel;
                 
-                //A, B, C, and D must be unlabeled
+                if (aLabel != 0 && (*regionsTable)[(*labelTable)[aLabel]].colorBits == pixelColors[i] && aLabel < min) min = aLabel;
+                if (bLabel != 0 && (*regionsTable)[(*labelTable)[bLabel]].colorBits == pixelColors[i] && bLabel < min) min = bLabel;
+                if (cLabel != 0 && (*regionsTable)[(*labelTable)[cLabel]].colorBits == pixelColors[i] && cLabel < min) min = cLabel;
+                if (dLabel != 0 && (*regionsTable)[(*labelTable)[dLabel]].colorBits == pixelColors[i] && dLabel < min) min = dLabel;
+                
+                //A, B, C, and D must be unlabeled since min is still the same value
                 if (min == width * height + 1) {
+                    //Give the cell the current label
                     labelBuffer[i] = currLabel;
-                    labelTable.push_back((int) labelTable.size());
+                    
+                    //Add the new label number to the label table
+                    labelTable->push_back((int) labelTable->size());
                     region r;
                     
                     //Initialize values for region/labels
@@ -178,24 +172,29 @@ template<typename T> void findGroups(CImg<T> image) {
                     r.maxX = x;
                     r.minY = y;
                     r.maxY = y;
-                    r.colorBits = map[i];
-                    regionsTable.push_back(r);
+                    r.colorBits = pixelColors[i];
                     
+                    //add the region to the table of regions.
+                    regionsTable->push_back(r);
+                    
+                    //increment so the next label number will be given out.
                     currLabel++;
                 } else {
+                    //give the cell the lowest label number of it's neighbors.
                     labelBuffer[i] = min;
                     
-                    regionsTable[min].maxY = y;
+                    (*regionsTable)[min].maxY = y;
                     
-                    regionsTable[min].mass++;
+                    (*regionsTable)[min].mass++;
                     
-                    if (x > regionsTable[min].maxX) regionsTable[min].maxX = x;
-                    if (x < regionsTable[min].minX) regionsTable[min].minX = x;
+                    if (x > (*regionsTable)[min].maxX) (*regionsTable)[min].maxX = x;
+                    if (x < (*regionsTable)[min].minX) (*regionsTable)[min].minX = x;
                     
-                    if (aLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[aLabel]].colorBits) labelTable[aLabel] = min;
-                    if (bLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[bLabel]].colorBits) labelTable[bLabel] = min;
-                    if (cLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[cLabel]].colorBits) labelTable[cLabel] = min;
-                    if (dLabel != 0 && regionsTable[min].colorBits == regionsTable[labelTable[dLabel]].colorBits) labelTable[dLabel] = min;
+                    //set labelTable value to smallest value of neighbors if the color is the same
+                    if (aLabel != 0 && (*regionsTable)[min].colorBits == (*regionsTable)[(*labelTable)[aLabel]].colorBits) (*labelTable)[aLabel] = min;
+                    if (bLabel != 0 && (*regionsTable)[min].colorBits == (*regionsTable)[(*labelTable)[bLabel]].colorBits) (*labelTable)[bLabel] = min;
+                    if (cLabel != 0 && (*regionsTable)[min].colorBits == (*regionsTable)[(*labelTable)[cLabel]].colorBits) (*labelTable)[cLabel] = min;
+                    if (dLabel != 0 && (*regionsTable)[min].colorBits == (*regionsTable)[(*labelTable)[dLabel]].colorBits) (*labelTable)[dLabel] = min;
                 }
             }
             else {
@@ -203,19 +202,37 @@ template<typename T> void findGroups(CImg<T> image) {
             }
         }
     }
+}
+
+template<typename T> void findRegions(CImg<T> image) {
+
+    int width = image.width();
+    int height = image.height();
+    
+    //values correspond to indeces of regionsTable array (map of label to region)
+    std::vector<int> labelTable = {0};
+    std::vector<region> regionsTable;
+
+    //Contains the label number for each cell (0 for unlabelled)
+    int labelBuffer[width * height];
+    
+    labelCells(image, labelBuffer, labelTable, regionsTable);
     
     for (int i = 1; i < regionsTable.size() - 1; i++) {
+        //if the label is not the smallest label number of the region
         if (labelTable[i] != i) {
             if (regionsTable[i].maxX > regionsTable[labelTable[i]].maxX) regionsTable[labelTable[i]].maxX = regionsTable[i].maxX;
             if (regionsTable[i].minX < regionsTable[labelTable[i]].minX) regionsTable[labelTable[i]].minX = regionsTable[i].minX;
             if (regionsTable[i].maxY > regionsTable[labelTable[i]].maxY) regionsTable[labelTable[i]].maxY = regionsTable[i].maxY;
             if (regionsTable[i].minY < regionsTable[labelTable[i]].minY) regionsTable[labelTable[i]].minY = regionsTable[i].minY;
         } else {
+            //if mass is big enough include the region as an official blob. Otherwise exclude as background noise.
             if (regionsTable[i].mass > 50) blobs.push_back(regionsTable[i]);
         }
     }
 }
 
+//set colors for blob for highlighting them.
 void setColors() {
     for (int i = 0; i < blobs.size();i++) {
         blobs[i].color = colorFromBits(blobs[i].colorBits);
@@ -223,6 +240,7 @@ void setColors() {
     }
 }
 
+//merge two regions
 region mergeBlobs(region first, region second) {
     region merged;
     
@@ -242,6 +260,7 @@ bool checkDensity(region first, region second, int threshold) {
     return newDensity - originalDensity >= 0 || originalDensity - newDensity < threshold;
 }
 
+//Merge blobs with similar densities into the same shape
 void mergeDensities() {
     for (int i = 0; i < blobs.size() - 1;i++) {
         for (int j = i + 1; j < blobs.size(); j++) {
@@ -261,25 +280,33 @@ void mergeDensities() {
     }
 }
 
-//detect the colors of the pixels using bitwise and store in map array
+//Detect the colors by confirming the color is within the ranges in the Y, U, and V arrays.
 template<typename T> CImg<T> detectColors(CImg<T> image) {
-    CImg<T> changed(image.width(), image.height(), 1, 3, 0);
-    CImg<T> converted = image.get_RGBtoYCbCr();
-    changed = image;
     for (int y = 0; y < image.height(); y++) {
         for (int x = 0; x < image.width(); x++) {
             
-            int color_y = converted(x, y, 0);
-            int color_u = converted(x, y, 1);
-            int color_v = converted(x, y, 2);
+            int color_y = image(x, y, 0);
+            int color_u = image(x, y, 1);
+            int color_v = image(x, y, 2);
             
             int colorBits = (y_arr[color_y] & u_arr[color_u]) & v_arr[color_v];
             
-            map.push_back(colorBits);
+            pixelColors.push_back(colorBits);
         }
     }
+}
+
+
+//Detect the colors, group regions and return the highlighted result.
+template<typename T> CImg<T> changeImage(CImg<T> image) {
+    CImg<T> changed(image.width(), image.height(), 1, 3, 0);
+    CImg<T> converted = image.get_RGBtoYCbCr();
     
-    findGroups(image);
+    changed = image;
+
+    detectColors(converted);
+    
+    findRegions(image);
     
     mergeDensities();
     
@@ -324,7 +351,7 @@ int main(int argc, const char * argv[]) {
     CImg<double> image("hydrant.jpg");
     CImgDisplay main_disp(image,"Original",0);
     
-    CImg<double> colors = detectColors(image);
+    CImg<double> colors = changeImage(image);
     CImgDisplay colors_disp(colors,"Original",0);
     
     while (!main_disp.is_closed()) {
