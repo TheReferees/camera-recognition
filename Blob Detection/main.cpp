@@ -9,14 +9,16 @@
 
 //STEP 1: THRESHOLDING
 
+#include "jni.h"
+#include "opencv/cv.h"
 #include <iostream>
 #include <stdlib.h>
 #include <math.h>
 #include <vector>
-#include "CImg.h"
-#define cimg_use_magick
+//#include "CImg.h"
+//#define cimg_use_magick
 
-using namespace cimg_library;
+//using namespace cimg_library;
 
 int y_arr[256];
 int u_arr[256];
@@ -132,9 +134,9 @@ bool loadColors() {
  LabelTable: Index is the label number, value is another label it is touching (optional)
              Intention is to map labels that touch eachother so they all point to one region
  */
-template<typename T> void labelCells(CImg<T> image, int * labelBuffer, std::vector<int> * labelTable, std::vector<region> * regionsTable) {
-    int width = image.width();
-    int height = image.height();
+void labelCells(cv::Mat image, int * labelBuffer, std::vector<int> * labelTable, std::vector<region> * regionsTable) {
+    int width = image.rows;
+    int height = image.cols;
     
     //Current label # to use
     int currLabel = 1;
@@ -204,13 +206,14 @@ template<typename T> void labelCells(CImg<T> image, int * labelBuffer, std::vect
     }
 }
 
-template<typename T> void findRegions(CImg<T> image) {
+void findRegions(cv::Mat image) {
 
-    int width = image.width();
-    int height = image.height();
+    int width = image.rows;
+    int height = image.cols;
     
     //values correspond to indeces of regionsTable array (map of label to region)
-    std::vector<int> labelTable = {0};
+    std::vector<int> labelTable;
+	labelTable.push_back(0);
     std::vector<region> regionsTable;
 
     //Contains the label number for each cell (0 for unlabelled)
@@ -281,13 +284,13 @@ void mergeDensities() {
 }
 
 //Detect the colors by confirming the color is within the ranges in the Y, U, and V arrays.
-template<typename T> void detectColors(CImg<T> image) {
-    for (int y = 0; y < image.height(); y++) {
-        for (int x = 0; x < image.width(); x++) {
+void detectColors(cv::Mat image) {
+    for (int y = 0; y < image.rows; y++) {
+        for (int x = 0; x < image.cols; x++) {
             
-            int color_y = image(x, y, 0);
-            int color_u = image(x, y, 1);
-            int color_v = image(x, y, 2);
+            int color_y = image.at<int>(0, y * image.cols + x);
+            int color_u = image.at<int>(1, y * image.cols + x);
+            int color_v = image.at<int>(2, y * image.cols + x);
             
             int colorBits = (y_arr[color_y] & u_arr[color_u]) & v_arr[color_v];
             
@@ -298,7 +301,7 @@ template<typename T> void detectColors(CImg<T> image) {
 
 
 //Detect the colors, group regions and return the highlighted result.
-template<typename T> CImg<T> changeImage(CImg<T> image) {
+/*template<typename T> CImg<T> changeImage(CImg<T> image) {
     CImg<T> changed(image.width(), image.height(), 1, 3, 0);
     CImg<T> converted = image.get_RGBtoYCbCr();
     
@@ -340,9 +343,45 @@ template<typename T> CImg<T> changeImage(CImg<T> image) {
     }
     
     return changed;
+} */
+
+std::vector<region> getBlobs(cv::Mat image) {
+    //CImg<T> converted = image.get_RGBtoYCbCr();
+
+    detectColors(image);
+    
+    findRegions(image);
+    
+    mergeDensities();
+
+    return blobs;
 }
 
-int main(int argc, const char * argv[]) {
+//returns array of arrays which are in this format: [[minX, maxX, minY, maxY, mass, colorBits]]
+extern "C" jobjectArray Java_PackageName_ClassName_findObjects( JNIEnv* env, cv::Mat image) {
+    std::vector<region> blobs = getBlobs(image);
+    
+    jintArray temp;
+    jobjectArray returnedObjects = env->NewObjectArray(blobs.size(), env->GetObjectClass(temp), NULL);
+    
+    
+    for (int i = 0; i < blobs.size(); i++) {
+        region b = blobs[i];
+        
+        jintArray blob = env->NewIntArray(6);
+        jint blobArray[6] = {b.minX, b.maxX, b.minY, b.maxY, b.mass, b.colorBits};
+        
+        env->SetIntArrayRegion(blob, 0, 6, blobArray);
+        env->SetObjectArrayElement(returnedObjects, i, blob);
+    }
+    
+    return returnedObjects;
+}
+
+int main(){
+    return 0;
+}
+/*int main(int argc, const char * argv[]) {
     cimg::imagemagick_path("/usr/local/bin/convert");
     
     if (!loadColors())
@@ -356,7 +395,7 @@ int main(int argc, const char * argv[]) {
     
     while (!main_disp.is_closed()) {
         main_disp.wait();
-    }
+    } 
     
     return 0;
-}
+} */
